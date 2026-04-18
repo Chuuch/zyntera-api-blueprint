@@ -3,7 +3,7 @@
  * create-zyntera-app — degit-based scaffold + .env + optional npm install.
  * Usage: npm create zyntera-app@latest [project-name]
  */
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -146,50 +146,149 @@ async function fetchGithubDefaultBranch(owner, repo) {
 }
 
 /**
- * Ordered list of degit sources to try. Uses API default branch, then main / master.
- * User-set `ZYNTERA_TEMPLATE=owner/repo#branch` uses a single ref only.
+ * Default branch via `git ls-remote` (no REST API; works when api.github.com is blocked).
  */
-async function resolveDegitSources(templateRepo) {
+function gitLsRemoteDefaultBranch(owner, repo) {
+  const url = `https://github.com/${owner}/${repo}.git`;
+  const r = spawnSync('git', ['ls-remote', '--symref', url, 'HEAD'], {
+    encoding: 'utf8',
+    stdio: 'pipe',
+  });
+  if (r.status !== 0) return null;
+  const m = r.stdout.match(/ref: refs\/heads\/(\S+)/);
+  return m ? m[1].trim() : null;
+}
+
+function gitIsAvailable() {
+  return spawnSync('git', ['--version'], { stdio: 'pipe' }).status === 0;
+}
+
+/**
+ * Ordered branch names to try for github:owner/repo (no # in template).
+ */
+async function resolveGithubBranchRefs(owner, repo) {
+  const refs = [];
+  const add = (r) => {
+    const x = String(r ?? '').trim();
+    if (x && !refs.includes(x)) refs.push(x);
+  };
+
+  if (process.env.ZYNTERA_REF) {
+    add(process.env.ZYNTERA_REF.trim());
+    return refs;
+  }
+
+  try {
+    add(await fetchGithubDefaultBranch(owner, repo));
+  } catch {
+    /* API blocked / offline */
+  }
+
+  add(gitLsRemoteDefaultBranch(owner, repo));
+
+  for (const r of ['main', 'master']) {
+    add(r);
+  }
+  return refs;
+}
+
+function gitCloneGithubShallow(owner, repo, ref, targetDir) {
+  const url = `https://github.com/${owner}/${repo}.git`;
+  if (fs.existsSync(targetDir)) {
+    fs.rmSync(targetDir, { recursive: true, force: true });
+  }
+  const r = spawnSync(
+    'git',
+    ['clone', '--depth', '1', '--branch', ref, url, targetDir],
+    { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  if (r.status !== 0) {
+    const err = (r.stderr || r.stdout || '').trim() || `git exited with ${r.status}`;
+    throw new Error(err);
+  }
+  const gitdir = path.join(targetDir, '.git');
+  if (fs.existsSync(gitdir)) {
+    fs.rmSync(gitdir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * degit applies `.degitignore` from the template; `git clone` does not. Mirror degit by
+ * removing listed paths (simple relative paths, one per line; # comments allowed).
+ */
+function applyDotDegitignore(root) {
+  const ignorePath = path.join(root, '.degitignore');
+  if (!fs.existsSync(ignorePath)) return;
+  const rootResolved = path.resolve(root);
+  function isUnder(p) {
+    const x = path.resolve(p);
+    return x === rootResolved || x.startsWith(rootResolved + path.sep);
+  }
+  const text = fs.readFileSync(ignorePath, 'utf8');
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.replace(/#.*/, '').trim();
+    if (!t) continue;
+    const rel = t.replace(/\/+$/, '');
+    if (!rel || rel.includes('..')) continue;
+    if (/[*?[\]]/.test(rel)) continue;
+    const full = path.join(root, rel);
+    if (!isUnder(full)) continue;
+    if (fs.existsSync(full)) {
+      fs.rmSync(full, { recursive: true, force: true });
+    }
+  }
+  try {
+    fs.unlinkSync(ignorePath);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * degit URLs + optional git fallback (same branch order) when degit cannot resolve GitHub.
+ */
+async function resolveTemplateClonePlan(templateRepo) {
   const t = templateRepo.trim();
 
   if (t.includes('#')) {
     const s = t.includes(':') ? t : `github:${t}`;
-    return [s];
-  }
-
-  if (process.env.ZYNTERA_REF) {
-    const ref = process.env.ZYNTERA_REF.trim();
-    const gh = parseGithubOwnerRepo(t);
-    if (gh) {
-      return [`github:${gh.owner}/${gh.repo}#${ref}`];
+    const m = s.match(/^github:([^/#]+)\/([^#]+)#(.+)$/i);
+    if (m) {
+      const owner = m[1].trim();
+      const repo = m[2].trim();
+      const ref = m[3].trim();
+      return {
+        degitSources: [s],
+        gitFallback: { owner, repo, refs: [ref] },
+      };
     }
+    return { degitSources: [s], gitFallback: null };
   }
 
   const gh = parseGithubOwnerRepo(t);
   if (gh) {
-    const base = `github:${gh.owner}/${gh.repo}`;
-    const refs = [];
-    try {
-      const db = await fetchGithubDefaultBranch(gh.owner, gh.repo);
-      refs.push(db);
-    } catch {
-      /* offline / rate limit — fall through */
-    }
-    for (const r of ['main', 'master']) {
-      if (!refs.includes(r)) refs.push(r);
-    }
-    return refs.map((ref) => `${base}#${ref}`);
+    const refs = await resolveGithubBranchRefs(gh.owner, gh.repo);
+    const degitSources = refs.map((ref) => `github:${gh.owner}/${gh.repo}#${ref}`);
+    return {
+      degitSources,
+      gitFallback: { owner: gh.owner, repo: gh.repo, refs },
+    };
   }
 
-  /* Non–GitHub shorthand: keep legacy pinning */
   const ref = process.env.ZYNTERA_REF ?? 'main';
   if (!t.includes(':')) {
-    return [`github:${t}#${ref}`];
+    return {
+      degitSources: [`github:${t}#${ref}`],
+      gitFallback: null,
+    };
   }
   if (/^github:/i.test(t)) {
-    return [`${t}#${ref}`];
+    return {
+      degitSources: [`${t}#${ref}`],
+      gitFallback: null,
+    };
   }
-  return [t];
+  return { degitSources: [t], gitFallback: null };
 }
 
 function toPackageName(input) {
@@ -275,7 +374,8 @@ async function main() {
     process.exit(1);
   }
 
-  const sources = await resolveDegitSources(templateRepo);
+  const clonePlan = await resolveTemplateClonePlan(templateRepo);
+  const sources = clonePlan.degitSources;
   console.log(
     `\x1b[90mTemplate:\x1b[0m ${sources[0]}${sources.length > 1 ? ' \x1b[90m(+ alternate refs if needed)\x1b[0m' : ''}`,
   );
@@ -303,13 +403,42 @@ async function main() {
     }
   }
 
+  if (lastErr && clonePlan.gitFallback && gitIsAvailable()) {
+    const { owner, repo, refs } = clonePlan.gitFallback;
+    console.log('\x1b[90m  degit failed; cloning with git…\x1b[0m');
+    for (let j = 0; j < refs.length; j++) {
+      const ref = refs[j];
+      if (j > 0) {
+        console.log(`\x1b[90m  git retry branch:\x1b[0m ${ref}`);
+      }
+      try {
+        if (fs.existsSync(targetDir)) {
+          fs.rmSync(targetDir, { recursive: true, force: true });
+        }
+        gitCloneGithubShallow(owner, repo, ref, targetDir);
+        lastErr = undefined;
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+  }
+
   if (lastErr) {
     console.error('\x1b[31mFailed to clone template.\x1b[0m', lastErr.message ?? lastErr);
-    console.error(
-      'Check the repo exists and is public, network allows api.github.com, or pin a branch: --template owner/repo#branch',
-    );
+    if (clonePlan.gitFallback && !gitIsAvailable()) {
+      console.error(
+        '\x1b[33mInstall git\x1b[0m for a non-degit fallback, or use: --template owner/repo#branch',
+      );
+    } else {
+      console.error(
+        'Ensure the repo is public and reachable on GitHub, or pin a branch: --template owner/repo#branch',
+      );
+    }
     process.exit(1);
   }
+
+  applyDotDegitignore(targetDir);
 
   const pkgPath = path.join(targetDir, 'package.json');
   if (fs.existsSync(pkgPath)) {
