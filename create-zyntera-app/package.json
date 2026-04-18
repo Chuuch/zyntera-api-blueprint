@@ -1,6 +1,6 @@
 {
   "name": "create-zyntera-app",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Scaffold the Zyntera API blueprint (Express, Drizzle, Better Auth) with env setup",
   "type": "module",
   "bin": {

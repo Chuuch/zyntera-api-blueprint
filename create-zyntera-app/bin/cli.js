@@ -110,23 +110,86 @@ function printLogo() {
 }
 
 /**
- * degit often fails with "could not find commit hash for HEAD" when no ref is set
- * (GitHub API / default branch resolution). Pin a branch: github:user/repo#main
+ * Parse `owner/repo` or `github:owner/repo` (no #ref). Returns null if not that shape.
  */
-function toDegitSource(templateRepo) {
-  const ref = process.env.ZYNTERA_REF ?? 'main';
+function parseGithubOwnerRepo(templateRepo) {
+  let s = templateRepo.trim();
+  if (s.includes('#')) return null;
+  if (/^github:/i.test(s)) s = s.slice('github:'.length);
+  const i = s.indexOf('/');
+  if (i <= 0 || i === s.length - 1) return null;
+  const owner = s.slice(0, i).trim();
+  const repo = s.slice(i + 1).trim();
+  if (!owner || !repo || repo.includes('/')) return null;
+  return { owner, repo };
+}
+
+/**
+ * Public GitHub API: default branch for the repo (works on clean machines; no degit cache).
+ */
+async function fetchGithubDefaultBranch(owner, repo) {
+  const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'create-zyntera-app (https://www.npmjs.com/package/create-zyntera-app)',
+  };
+  if (process.env.GITHUB_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  }
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`GitHub API ${res.status}`);
+  }
+  const data = await res.json();
+  if (!data?.default_branch) throw new Error('No default_branch in API response');
+  return String(data.default_branch);
+}
+
+/**
+ * Ordered list of degit sources to try. Uses API default branch, then main / master.
+ * User-set `ZYNTERA_TEMPLATE=owner/repo#branch` uses a single ref only.
+ */
+async function resolveDegitSources(templateRepo) {
   const t = templateRepo.trim();
 
   if (t.includes('#')) {
-    return t.includes(':') ? t : `github:${t}`;
+    const s = t.includes(':') ? t : `github:${t}`;
+    return [s];
   }
+
+  if (process.env.ZYNTERA_REF) {
+    const ref = process.env.ZYNTERA_REF.trim();
+    const gh = parseGithubOwnerRepo(t);
+    if (gh) {
+      return [`github:${gh.owner}/${gh.repo}#${ref}`];
+    }
+  }
+
+  const gh = parseGithubOwnerRepo(t);
+  if (gh) {
+    const base = `github:${gh.owner}/${gh.repo}`;
+    const refs = [];
+    try {
+      const db = await fetchGithubDefaultBranch(gh.owner, gh.repo);
+      refs.push(db);
+    } catch {
+      /* offline / rate limit — fall through */
+    }
+    for (const r of ['main', 'master']) {
+      if (!refs.includes(r)) refs.push(r);
+    }
+    return refs.map((ref) => `${base}#${ref}`);
+  }
+
+  /* Non–GitHub shorthand: keep legacy pinning */
+  const ref = process.env.ZYNTERA_REF ?? 'main';
   if (!t.includes(':')) {
-    return `github:${t}#${ref}`;
+    return [`github:${t}#${ref}`];
   }
   if (/^github:/i.test(t)) {
-    return `${t}#${ref}`;
+    return [`${t}#${ref}`];
   }
-  return t;
+  return [t];
 }
 
 function toPackageName(input) {
@@ -212,21 +275,38 @@ async function main() {
     process.exit(1);
   }
 
-  const src = toDegitSource(templateRepo);
-  console.log(`\x1b[90mTemplate:\x1b[0m ${src}`);
+  const sources = await resolveDegitSources(templateRepo);
+  console.log(
+    `\x1b[90mTemplate:\x1b[0m ${sources[0]}${sources.length > 1 ? ' \x1b[90m(+ alternate refs if needed)\x1b[0m' : ''}`,
+  );
   console.log(`\x1b[90mTarget:\x1b[0m  ${targetDir}\n`);
 
-  const emitter = degit(src, { cache: true, force: true });
-  emitter.on('info', (info) => {
-    if (info.message) console.log(`\x1b[90m  ${info.message}\x1b[0m`);
-  });
+  let lastErr;
+  for (let i = 0; i < sources.length; i++) {
+    const src = sources[i];
+    if (i > 0) {
+      console.log(`\x1b[90m  Retry with:\x1b[0m ${src}`);
+    }
+    try {
+      if (fs.existsSync(targetDir)) {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+      }
+      const emitter = degit(src, { cache: true, force: true });
+      emitter.on('info', (info) => {
+        if (info.message) console.log(`\x1b[90m  ${info.message}\x1b[0m`);
+      });
+      await emitter.clone(targetDir);
+      lastErr = undefined;
+      break;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
 
-  try {
-    await emitter.clone(targetDir);
-  } catch (e) {
-    console.error('\x1b[31mFailed to clone template.\x1b[0m', e.message ?? e);
+  if (lastErr) {
+    console.error('\x1b[31mFailed to clone template.\x1b[0m', lastErr.message ?? lastErr);
     console.error(
-      'Try: ZYNTERA_REF=main (default), or owner/repo#branch, or --template owner/repo#master. Ensure git is installed.',
+      'Check the repo exists and is public, network allows api.github.com, or pin a branch: --template owner/repo#branch',
     );
     process.exit(1);
   }

@@ -41,3 +41,5 @@ create-zyntera-app my-api
 ## Environment
 
 - Default template: `Chuuch/zyntera-api-blueprint` (override with `ZYNTERA_TEMPLATE` or `--template owner/repo`).
+- **Branch:** For GitHub `owner/repo` without `#branch`, the CLI asks the **GitHub API** for `default_branch`, then falls back to `main`, then `master`. That avoids “could not find commit hash for main” on machines with no degit cache. Pin explicitly with `owner/repo#branch` or `ZYNTERA_REF=branch` if needed.
+- **Private repos / rate limits:** optional `GITHUB_TOKEN` (Bearer) is sent to `api.github.com` if set.
