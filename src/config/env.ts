@@ -13,6 +13,7 @@ const envSchema = z.object({
     DB_NAME: z.string(),
     DB_ROOT_PASSWORD: z.string(),
     DB_PORT: z.coerce.number().default(3306),
+    BETTER_AUTH_URL: z.url().default('http://localhost:3000'),
     BETTER_AUTH_SECRET: z.string().min(32),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 });

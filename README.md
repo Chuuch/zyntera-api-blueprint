@@ -10,6 +10,7 @@ A production-oriented **Node.js API template**: [Express 5](https://expressjs.co
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
+- [Create with CLI (`create-zyntera-app`)](#create-with-cli-create-zyntera-app)
 - [Configuration](#configuration)
 - [Scripts](#scripts)
 - [API surface](#api-surface)
@@ -62,6 +63,32 @@ flowchart LR
 - **Node.js** 20+ (LTS recommended; CI images in this repo use current Node Alpine/Slim).
 - **MySQL** 8.x (local install, managed service, or Compose service).
 - **npm** (or pnpm/yarn if you adapt lockfiles).
+
+---
+
+## Create with CLI (`create-zyntera-app`)
+
+Similar to **create-vite**, you can scaffold this repo with a wizard that sets the **project folder name**, writes **`.env`** (including a generated `BETTER_AUTH_SECRET` and a URL-safe `DATABASE_URL`), and optionally runs **`npm install`**.
+
+After you [publish](https://docs.npmjs.com/cli/v9/commands/npm-publish) the `create-zyntera-app` package from the `create-zyntera-app/` directory in this repository:
+
+```bash
+npm create zyntera-app@latest
+# or with a name up front:
+npm create zyntera-app@latest my-api
+```
+
+Use another GitHub template (default is this blueprint) with:
+
+```bash
+ZYNTERA_TEMPLATE=owner/other-repo npm create zyntera-app@latest my-api
+# or
+npx create-zyntera-app@latest my-api --template owner/other-repo
+```
+
+**Local try (before publishing):** from the `create-zyntera-app` folder, run `node index.mjs my-test-api` (or `npm link`, then `create-zyntera-app my-test-api`).
+
+The template clone uses [degit](https://github.com/Rich-Harris/degit); paths listed in [`.degitignore`](.degitignore) (for example `create-zyntera-app/`) are not copied into new projects.
 
 ---
 

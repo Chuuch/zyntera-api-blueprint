@@ -1,0 +1,28 @@
+{
+  "name": "create-zyntera-app",
+  "version": "0.1.0",
+  "description": "Scaffold the Zyntera API blueprint (Express, Drizzle, Better Auth) with env setup",
+  "type": "module",
+  "bin": {
+    "create-zyntera-app": "./index.mjs"
+  },
+  "files": [
+    "index.mjs"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "zyntera",
+    "express",
+    "drizzle",
+    "better-auth",
+    "template",
+    "scaffold"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "degit": "^2.8.4",
+    "prompts": "^2.4.2"
+  }
+}
