@@ -3,52 +3,111 @@
  * create-zyntera-app — degit-based scaffold + .env + optional npm install.
  * Usage: npm create zyntera-app@latest [project-name]
  */
-import { execSync, spawnSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
 /**
- * Node 25 + some IDEs set NODE_OPTIONS with `--localstorage-file` but no path,
- * which prints: Warning: `--localstorage-file` was provided without a valid path
- * Re-exec once with that flag removed (keep `--localstorage-file=/valid/path`).
+ * Node 25 + IDE-injected `--localstorage-file` without a path. The message can be
+ * emitted via process.emitWarning and/or written straight to stderr — handle both.
+ * Only filters lines matching this specific warning.
  */
-(function reexecIfBrokenLocalstorageInNodeOptions() {
-  const raw = process.env.NODE_OPTIONS;
-  if (!raw?.includes('localstorage-file')) return;
+(function suppressLocalstorageFilePathWarning() {
+  const origEmit = process.emitWarning;
+  process.emitWarning = function (warning, type, code, ctor) {
+    const msg =
+      typeof warning === 'string'
+        ? warning
+        : warning && typeof warning === 'object' && 'message' in warning
+          ? String(warning.message)
+          : '';
+    if (/localstorage-file/i.test(msg) && /valid path/i.test(msg)) return;
+    return origEmit.apply(process, arguments);
+  };
 
-  const prefix = '--localstorage-file';
-  const tokens = raw.split(/\s+/).filter(Boolean);
-  const kept = [];
-  for (const t of tokens) {
-    if (t === prefix) continue;
-    if (t.startsWith(`${prefix}=`)) {
-      const v = t.slice(prefix.length + 1);
-      if (v.length > 0) kept.push(t);
-      continue;
+  const origWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = function (chunk, encoding, cb) {
+    let s = '';
+    if (Buffer.isBuffer(chunk)) s = chunk.toString('utf8');
+    else if (typeof chunk === 'string') s = chunk;
+    else if (chunk != null) s = String(chunk);
+
+    if (s && /localstorage-file/i.test(s) && /valid path/i.test(s)) {
+      if (typeof encoding === 'function') encoding();
+      else if (typeof cb === 'function') cb();
+      return true;
     }
-    kept.push(t);
-  }
-  const next = kept.join(' ').trim();
-  if (next === raw.trim()) return;
-
-  const env = { ...process.env };
-  if (next) env.NODE_OPTIONS = next;
-  else delete env.NODE_OPTIONS;
-
-  const r = spawnSync(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
-    stdio: 'inherit',
-    env,
-  });
-  const code = r.status ?? (r.signal ? 1 : 0);
-  process.exit(code);
+    return origWrite(chunk, encoding, cb);
+  };
 })();
 
 const DEFAULT_TEMPLATE = 'Chuuch/zyntera-api-blueprint';
 
-/** Banner icon (emoji). Override: `ZYNTERA_CLI_ICON="🚀" node index.mjs` or `ZYNTERA_CLI_ICON=` for none */
+/** Banner icon (emoji) when ASCII wordmark is off. `ZYNTERA_CLI_ICON=` disables. */
 const CLI_ICON = process.env.ZYNTERA_CLI_ICON ?? '⚡';
+
+/**
+ * Subtitle under the ASCII art, and the text after “Zyntera ” in the compact banner.
+ * Tweak here or override at runtime: `ZYNTERA_CLI_TAGLINE="API · scaffold" node index.mjs`
+ */
+const CLI_TAGLINE = process.env.ZYNTERA_CLI_TAGLINE ?? '⚡ Zyntera API — create app';
+
+/** Set `ZYNTERA_NO_ASCII=1` to force the one-line banner only. */
+const NO_ASCII = process.env.ZYNTERA_NO_ASCII === '1';
+
+/**
+ * Block wordmark “Zyntera” (~62 cols). Row colors ≈ purple/magenta Z → white (brand).
+ */
+const LOGO_LINES = [
+  ' ███████╗ ██╗   ██╗███╗   ██╗████████╗███████╗██████╗  █████╗ ',
+  '     ██╔╝ ╚██╗ ██╔╝████╗  ██║╚══██╔══╝██╔════╝██╔══██╗██╔══██╗',
+  '    ██╔╝   ╚████╔╝ ██╔██╗ ██║   ██║   █████╗  ██████╔╝███████║',
+  '   ██╔╝     ╚██╔╝  ██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗██╔══██║',
+  '  ██╔╝       ██║   ██║ ╚████║   ██║   ███████╗██║  ██║██║  ██║',
+  ' ███████╗    ╚═╝   ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝',
+];
+
+const LOGO_ROW_COLORS = [
+  '\x1b[38;5;201m',
+  '\x1b[38;5;207m',
+  '\x1b[38;5;213m',
+  '\x1b[38;5;219m',
+  '\x1b[38;5;225m',
+  '\x1b[97m',
+];
+
+function logoMaxWidth() {
+  return Math.max(...LOGO_LINES.map((l) => [...l].length));
+}
+
+function printLogo() {
+  const rawCols = process.stdout.columns;
+  const cols =
+    typeof rawCols === 'number' && rawCols > 0 ? rawCols : 80;
+  const need = logoMaxWidth() + 2;
+
+  function printCompact() {
+    const line = [CLI_ICON, `Zyntera ${CLI_TAGLINE}`].filter(Boolean).join('  ');
+    console.log(`\x1b[36m%s\x1b[0m`, line);
+  }
+
+  if (NO_ASCII) {
+    printCompact();
+    return;
+  }
+  if (cols < need) {
+    printCompact();
+    console.log(`\x1b[90m  (widen terminal to ≥${need} cols for ASCII wordmark)\x1b[0m`);
+    return;
+  }
+
+  for (let i = 0; i < LOGO_LINES.length; i++) {
+    console.log(`${LOGO_ROW_COLORS[i]}${LOGO_LINES[i]}\x1b[0m`);
+  }
+  console.log(`\x1b[90m  ${CLI_TAGLINE}\x1b[0m`);
+}
 
 /**
  * degit often fails with "could not find commit hash for HEAD" when no ref is set
@@ -123,8 +182,7 @@ async function main() {
   const cwd = process.cwd();
 
   console.log('');
-  const banner = [CLI_ICON, 'Zyntera API — create app'].filter(Boolean).join('  ');
-  console.log('\x1b[36m%s\x1b[0m', banner);
+  printLogo();
   console.log('');
 
   let projectName = argProject;
