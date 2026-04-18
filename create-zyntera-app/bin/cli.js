@@ -50,7 +50,7 @@ const CLI_ICON = process.env.ZYNTERA_CLI_ICON ?? '⚡';
 
 /**
  * Subtitle under the ASCII art, and the text after “Zyntera ” in the compact banner.
- * Tweak here or override at runtime: `ZYNTERA_CLI_TAGLINE="API · scaffold" node cli.mjs`
+ * Tweak here or override at runtime: `ZYNTERA_CLI_TAGLINE="API · scaffold" node bin/cli.js`
  */
 const CLI_TAGLINE = process.env.ZYNTERA_CLI_TAGLINE ?? '⚡ Zyntera API — create app';
 

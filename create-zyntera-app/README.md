@@ -20,13 +20,15 @@ npm publish --access public
 
 Ensure the package name `create-zyntera-app` is available on the npm scope you use.
 
+With **npm 10+**, the `bin` path must look like `bin/cli.js` (no `./` prefix). Otherwise `npm publish` may warn that the bin entry was “corrected” or removed ([npm/cli#7302](https://github.com/npm/cli/issues/7302)).
+
 ## Develop locally
 
-**Install dependencies once** in this folder (`degit` and `prompts` are required — without `node_modules`, `node cli.mjs` will fail):
+**Install dependencies once** in this folder (`degit` and `prompts` are required — without `node_modules`, `node bin/cli.js` will fail):
 
 ```bash
 npm install
-node cli.mjs ./test-output
+node bin/cli.js ./test-output
 ```
 
 Or link globally:
