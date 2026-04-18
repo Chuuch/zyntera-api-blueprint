@@ -13,6 +13,9 @@ import prompts from 'prompts';
 
 const DEFAULT_TEMPLATE = 'Chuuch/zyntera-api-blueprint';
 
+/** Banner icon (emoji). Override: `ZYNTERA_CLI_ICON="🚀" node index.mjs` or `ZYNTERA_CLI_ICON=` for none */
+const CLI_ICON = process.env.ZYNTERA_CLI_ICON ?? '⚡';
+
 /**
  * degit often fails with "could not find commit hash for HEAD" when no ref is set
  * (GitHub API / default branch resolution). Pin a branch: github:user/repo#main
@@ -69,7 +72,8 @@ async function main() {
   const cwd = process.cwd();
 
   console.log('');
-  console.log('\x1b[36m%s\x1b[0m', '◆  Zyntera API — create app');
+  const banner = [CLI_ICON, 'Zyntera API — create app'].filter(Boolean).join('  ');
+  console.log('\x1b[36m%s\x1b[0m', banner);
   console.log('');
 
   let projectName = argProject;
