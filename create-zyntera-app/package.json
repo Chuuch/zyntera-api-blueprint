@@ -1,13 +1,13 @@
 {
   "name": "create-zyntera-app",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scaffold the Zyntera API blueprint (Express, Drizzle, Better Auth) with env setup",
   "type": "module",
   "bin": {
-    "create-zyntera-app": "./index.mjs"
+    "create-zyntera-app": "./cli.mjs"
   },
   "files": [
-    "index.mjs"
+    "cli.mjs"
   ],
   "engines": {
     "node": ">=20"

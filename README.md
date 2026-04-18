@@ -86,7 +86,7 @@ ZYNTERA_TEMPLATE=owner/other-repo npm create zyntera-app@latest my-api
 npx create-zyntera-app@latest my-api --template owner/other-repo
 ```
 
-**Local try (before publishing):** from the `create-zyntera-app` folder, run `node index.mjs my-test-api` (or `npm link`, then `create-zyntera-app my-test-api`).
+**Local try (before publishing):** from the `create-zyntera-app` folder, run `node cli.mjs my-test-api` (or `npm link`, then `create-zyntera-app my-test-api`).
 
 The template clone uses [degit](https://github.com/Rich-Harris/degit); paths listed in [`.degitignore`](.degitignore) (for example `create-zyntera-app/`) are not copied into new projects.
 
