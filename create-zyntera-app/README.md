@@ -22,6 +22,8 @@ Ensure the package name `create-zyntera-app` is available on the npm scope you u
 
 ## Develop locally
 
+**Install dependencies once** in this folder (`degit` and `prompts` are required — without `node_modules`, `node index.mjs` will fail):
+
 ```bash
 npm install
 node index.mjs ./test-output

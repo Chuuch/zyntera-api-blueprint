@@ -3,13 +3,47 @@
  * create-zyntera-app — degit-based scaffold + .env + optional npm install.
  * Usage: npm create zyntera-app@latest [project-name]
  */
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import degit from 'degit';
-import prompts from 'prompts';
+
+/**
+ * Node 25 + some IDEs set NODE_OPTIONS with `--localstorage-file` but no path,
+ * which prints: Warning: `--localstorage-file` was provided without a valid path
+ * Re-exec once with that flag removed (keep `--localstorage-file=/valid/path`).
+ */
+(function reexecIfBrokenLocalstorageInNodeOptions() {
+  const raw = process.env.NODE_OPTIONS;
+  if (!raw?.includes('localstorage-file')) return;
+
+  const prefix = '--localstorage-file';
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  const kept = [];
+  for (const t of tokens) {
+    if (t === prefix) continue;
+    if (t.startsWith(`${prefix}=`)) {
+      const v = t.slice(prefix.length + 1);
+      if (v.length > 0) kept.push(t);
+      continue;
+    }
+    kept.push(t);
+  }
+  const next = kept.join(' ').trim();
+  if (next === raw.trim()) return;
+
+  const env = { ...process.env };
+  if (next) env.NODE_OPTIONS = next;
+  else delete env.NODE_OPTIONS;
+
+  const r = spawnSync(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
+    stdio: 'inherit',
+    env,
+  });
+  const code = r.status ?? (r.signal ? 1 : 0);
+  process.exit(code);
+})();
 
 const DEFAULT_TEMPLATE = 'Chuuch/zyntera-api-blueprint';
 
@@ -68,6 +102,23 @@ function parseArgs(argv) {
 }
 
 async function main() {
+  let degit;
+  let prompts;
+  try {
+    const d = await import('degit');
+    const p = await import('prompts');
+    degit = d.default;
+    prompts = p.default;
+  } catch (e) {
+    if (e?.code === 'ERR_MODULE_NOT_FOUND') {
+      console.error(
+        '\x1b[31mMissing dependencies.\x1b[0m Run \x1b[1mnpm install\x1b[0m in the create-zyntera-app directory first.',
+      );
+      process.exit(1);
+    }
+    throw e;
+  }
+
   const { project: argProject, template: templateRepo } = parseArgs(process.argv);
   const cwd = process.cwd();
 
