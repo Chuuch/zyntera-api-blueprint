@@ -19,7 +19,7 @@ export const createAuthController = (service: AuthService) => ({
      */
     getMe: async (req: Request, res: Response) => {
         try {
-            const headers = new Headers(req.headers as any);
+            const headers = new Headers(req.headers as HeadersInit);
             const session = await service.getSession(headers);
 
             if (!session) {
@@ -28,7 +28,7 @@ export const createAuthController = (service: AuthService) => ({
 
             return res.json(session);
         } catch (error) {
-            return res.status(500).json({ message: 'Internal Server Error' });
+            return res.status(500).json({ message: 'Internal Server Error', error });
         }
     }
 });

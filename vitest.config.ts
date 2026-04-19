@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
     test: {
-        env: config({ path: '.env' }).parsed as any,
+        env: config({ path: '.env' }).parsed ?? {},
         globals: true,
     },
 });

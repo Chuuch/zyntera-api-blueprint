@@ -41,6 +41,7 @@ create-zyntera-app my-api
 ## Environment
 
 - Default template: `Chuuch/zyntera-api-blueprint` (override with `ZYNTERA_TEMPLATE` or `--template owner/repo`).
-- **Branch:** For GitHub `owner/repo` without `#branch`, the CLI tries: **GitHub API** `default_branch`, then **`git ls-remote`** (works if REST API is blocked), then `main` / `master`. If **degit** still fails, it runs **`git clone --depth 1`** when `git` is installed.
-- **`.degitignore`:** After any successful clone, the CLI applies the template’s `.degitignore` (same paths [degit](https://github.com/Rich-Harris/degit) would drop), so the **git** fallback does not leave `create-zyntera-app/` or other scaffold-only paths in the new project.
+- **Branch:** For GitHub `owner/repo` without `#branch`, the CLI tries: **GitHub API** `default_branch`, then `**git ls-remote`** (works if REST API is blocked), then `main` / `master`. If **degit** still fails, it runs `**git clone --depth 1`** when `git` is installed.
+- `**.degitignore`:** After any successful clone, the CLI applies the template’s `.degitignore` (same paths [degit](https://github.com/Rich-Harris/degit) would drop), so the **git** fallback does not leave `create-zyntera-app/` or other scaffold-only paths in the new project.
 - **Private repos / rate limits:** optional `GITHUB_TOKEN` (Bearer) is sent to `api.github.com` if set.
+

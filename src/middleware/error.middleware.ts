@@ -2,7 +2,6 @@
  * Express error-handling middleware: logs the error and returns a JSON error body.
  */
 import { NextFunction, Request, Response } from 'express';
-import { logger } from '../config/logger.js';
 
 /**
  * @param err - Thrown error or `{ status, statusCode, message, code }`-shaped object.
@@ -11,25 +10,20 @@ import { logger } from '../config/logger.js';
  * @param next - Unused (signature required by Express).
  */
 export const errorHandler = (
-    err: any,
+    err: unknown,
     req: Request,
     res: Response,
-    next: NextFunction,
+    _next: NextFunction,
 ) => {
-    const statusCode = err.status || err.statusCode || 500;
+    const statusCode = err instanceof Error ? 500 :
+    (err as { status?: number; statusCode?: number }).status ||
+    (err as { status?: number; statusCode?: number }).statusCode || 500;
 
-    logger.error({
-        err,
-        method: req.method,
-        url: req.url,
-        body: req.body,
-    }, 'Unhandled Application Error');
-
-    res.status(statusCode as number).json({
+    res.status(statusCode).json({
         success: false,
         error: {
-            message: statusCode === 500 ? 'Internal Server Error' : err.message,
-            code: err.code || 'INTERNAL_ERROR',
+            message: statusCode === 500 ? 'Internal Server Error' : (err as Error).message,
+            code: (err as unknown as { code?: string }).code || 'INTERNAL_ERROR',
         },
     });
 }

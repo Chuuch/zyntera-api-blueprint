@@ -19,7 +19,7 @@ const poolConfig = {
     queueLimit: 0,            // No limit on the number of connection requests in queue
     enableKeepAlive: true,    // Keep conns alive to avoid TCP handshake overhead
     keepAliveInitialDelay: 0, // Initial delay in milliseconds before sending keep-alive probes
-    connectionTimeout: 10000, // Fail if it takes >10s to connect
+    connectTimeout: 10000, // Fail if it takes >10s to connect
 }
 
 const pool = mysql.createPool(poolConfig);

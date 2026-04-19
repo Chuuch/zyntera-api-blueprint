@@ -1,3 +1,4 @@
+import type { AuthSession } from "../config/auth.js";
 /**
  * Auth domain service: wraps Better Auth session API and `UserRepository`.
  */
@@ -9,7 +10,7 @@ import { UserRepository } from "../repositories/user.repository.js";
  * Session and user persistence operations used by controllers.
  */
 export type AuthService = {
-    getSession: (headers: Headers) => Promise<any>;
+    getSession: (headers: Headers) => Promise<AuthSession | null>;
     getUserByEmail: (email: string) => Promise<User | null>;
     createUser: (data: NewUser) => Promise<User>;
 }
